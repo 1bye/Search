@@ -1,5 +1,25 @@
 # Search
 
+## Gesture-tabs experiment (1bye fork)
+
+This fork adds an optional magnetic tab shelf to [driceroland/Search](https://github.com/driceroland/Search). The app is still named **Search** for now.
+
+Build locally with `SEARCH_SIGN_IDENTITY=- ./build.sh debug`, then open `build/Search.app`. In **Settings → Tabs**, turn on **Gesture tabs**.
+
+- **Option–Space** opens or dismisses the shelf. Every tab in the current space stays in its original order. Split pairs share one preview.
+- Move one finger on the trackpad: the dot follows continuously and gently settles toward the nearest tab when you pause. **Click or Return** opens the selected tab; **Escape or right-click** dismisses.
+- Use **two fingers to scroll**, or move the dot toward the top/bottom edge. Arrow keys also navigate the full collection.
+- Press **S** in the shelf to adjust **Pointer speed** (default 4×) and **Magnetic attraction** (default 35%; 0 disables it).
+- To open it with four fingers, map a downward four-finger swipe to **Option–Space** in BetterTouchTool for this app. This build does not intercept macOS gestures or change system gesture settings.
+
+The fork uses bundle ID `com.1bye.search`, profile folder `~/Library/Application Support/Search-1bye`, and separate credential labels. Upstream auto-updates are disabled so they cannot replace this experiment. Local builds are ad-hoc signed; this is not a notarized release. The original MIT license and attribution remain below.
+
+Checks: `swift test --filter GestureShelfTests`. Native trackpad feel still needs human calibration on the intended hardware.
+
+---
+
+## Original Search
+
 A small, fast, quiet web browser for the Mac, by [Office Commun](https://officecommun.com).
 
 ![Search, with its tabs down the left and a page taking the rest of the window](.github/screenshot.png)

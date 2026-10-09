@@ -66,7 +66,7 @@ struct WelcomePanel: View {
                 Text("Search")
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(Palette.ink)
-                Text("A browser with nothing in the way. Four megabytes, the engine already in your Mac, and as little around the page as we could manage.")
+                Text("An experimental fork of Search. Turn on Gesture tabs in Settings › Tabs to hide the tab bar and open a magnetic tab shelf with ⌥Space.")
                     .font(.system(size: 14.5))
                     .foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center)

@@ -54,6 +54,23 @@ final class TabSwitcher: ObservableObject {
     private var previewRequested = false
     private var generation = UUID()
     var active: Bool { !candidates.isEmpty }
+    @Published private(set) var gesture = false
+    let gesturePointer = GestureShelfState()
+
+    func openShelf(row: [Tab.ID], current: Tab.ID) {
+        cancel()
+        var seen: Set<Tab.ID> = []
+        candidates = row.filter { seen.insert($0).inserted }
+        guard candidates.contains(current) else { candidates = []; return }
+        selectedID = current
+        gesture = true
+        show()
+    }
+
+    func pick(_ id: Tab.ID) {
+        guard candidates.contains(id), selectedID != id else { return }
+        selectedID = id
+    }
 
     /// The tab just left goes to the front, with a picture of it as it was.
     /// Tabs that are gone fall out, and only the ten latest keep a picture.
@@ -103,7 +120,7 @@ final class TabSwitcher: ObservableObject {
             guard index >= 5 else { return }
             next = index - 5
         case .down:
-            guard index < 5, candidates.count > 5 else { return }
+            guard index / 5 < (candidates.count - 1) / 5 else { return }
             next = min(index + 5, candidates.count - 1)
         }
         self.selectedID = candidates[next]
@@ -118,6 +135,8 @@ final class TabSwitcher: ObservableObject {
 
     func cancel() {
         guard active || reveal != nil || visible else { return }
+        gesturePointer.stop()
+        gesture = false
         reveal?.cancel()
         reveal = nil
         generation = UUID()
@@ -212,7 +231,9 @@ struct TabSwitcherOverlay: View {
     @ObservedObject var switcher: TabSwitcher
 
     var body: some View {
-        if switcher.visible {
+        if switcher.visible, switcher.gesture {
+            GestureShelf(browser: browser, switcher: switcher, pointer: switcher.gesturePointer, prefs: browser.prefs)
+        } else if switcher.visible {
             GeometryReader { geometry in
                 let columns = min(5, switcher.candidates.count)
                 let width = min(176, (geometry.size.width - 64 - CGFloat(columns - 1) * 8) / CGFloat(columns))
@@ -241,7 +262,7 @@ struct TabSwitcherOverlay: View {
                                 HStack(spacing: 8) {
                                     ForEach(Array(switcher.candidates.dropFirst(row * 5).prefix(5)), id: \.self) { id in
                                         if let tab = browser.tabs.first(where: { $0.id == id }) {
-                                            card(tab, width: width, previewHeight: previewHeight, height: cardHeight)
+                                            TabSwitcherCard(browser: browser, switcher: switcher, tab: tab, width: width, previewHeight: previewHeight, height: cardHeight)
                                         }
                                     }
                                 }
@@ -257,7 +278,7 @@ struct TabSwitcherOverlay: View {
                     .onPreferenceChange(PanelFrame.self) { frame in
                         MainActor.assumeIsolated { switcher.panelFrame = frame }
                     }
-                    .onPreferenceChange(CardFrames.self) { frames in
+                    .onPreferenceChange(TabSwitcherCardFrames.self) { frames in
                         MainActor.assumeIsolated { switcher.cardFrames = frames }
                     }
                     .onContinuousHover(coordinateSpace: .global) { phase in
@@ -283,13 +304,22 @@ struct TabSwitcherOverlay: View {
             if next != .zero { value = next }
         }
     }
+}
 
-    private struct CardFrames: PreferenceKey {
-        static let defaultValue: [Tab.ID: CGRect] = [:]
-        static func reduce(value: inout [Tab.ID: CGRect], nextValue: () -> [Tab.ID: CGRect]) {
-            value.merge(nextValue()) { $1 }
-        }
+struct TabSwitcherCardFrames: PreferenceKey {
+    static let defaultValue: [Tab.ID: CGRect] = [:]
+    static func reduce(value: inout [Tab.ID: CGRect], nextValue: () -> [Tab.ID: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
+}
+
+struct TabSwitcherCard: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var switcher: TabSwitcher
+    var tab: Tab
+    var width: CGFloat
+    var previewHeight: CGFloat
+    var height: CGFloat
 
     private func picture(_ tab: Tab, width: CGFloat, height: CGFloat) -> some View {
         ZStack {
@@ -307,7 +337,7 @@ struct TabSwitcherOverlay: View {
         .frame(width: width, height: height)
     }
 
-    private func card(_ tab: Tab, width: CGFloat, previewHeight: CGFloat, height: CGFloat) -> some View {
+    var body: some View {
         let partner: Tab? = switcher.partners[tab.id].flatMap { id in browser.tabs.first { $0.id == id } }
         let caption: String = partner.map { tab.label + " · " + $0.label } ?? tab.label
         let side: CGFloat = partner == nil ? width - 16 : (width - 18) / 2
@@ -340,7 +370,7 @@ struct TabSwitcherOverlay: View {
         }
         .buttonStyle(.plain)
         .background(GeometryReader { box in
-            Color.clear.preference(key: CardFrames.self, value: [tab.id: box.frame(in: .global)])
+            Color.clear.preference(key: TabSwitcherCardFrames.self, value: [tab.id: box.frame(in: .global)])
         })
         .accessibilityLabel("Switch to \(tab.label)")
         .accessibilityValue(tab.id == switcher.selectedID ? "Selected" : "")

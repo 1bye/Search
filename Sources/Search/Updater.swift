@@ -132,6 +132,7 @@ final class Updater: ObservableObject {
     /// checks every time.
     func checkIfDue(then say: @escaping (String) -> Void) {
         self.say = say
+        guard !Store.ownContainer || Updater.overridden else { return }
         Swap.sweep()
         // And again every hour for as long as the app is up — a browser that
         // is left open for a week would otherwise never look.
@@ -157,6 +158,10 @@ final class Updater: ObservableObject {
     /// Search › Check for Updates…: the result is said in the line at the
     /// foot of the window, and an available update is offered in the menu.
     func checkByHand() {
+        guard !Store.ownContainer || Updater.overridden else {
+            say?("This experimental fork is updated from github.com/1bye/Search")
+            return
+        }
         switch stage {
         case .ready(let next):
             say?("Search \(next.version) is ready — relaunch to use it")
@@ -179,6 +184,7 @@ final class Updater: ObservableObject {
     /// names, or nil when this is the latest; what becomes of it after that
     /// is said through the line handed to `checkIfDue`.
     func check(then done: @escaping (Release?) -> Void) {
+        guard !Store.ownContainer || Updater.overridden else { done(nil); return }
         guard !checking else { return }
         checking = true
         Task { [weak self] in

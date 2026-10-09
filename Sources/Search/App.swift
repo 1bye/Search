@@ -89,6 +89,10 @@ struct SearchApp: App {
                     .disabled(!browser.finding)
             }
             CommandGroup(replacing: .toolbar) {
+                Button("Show Tab Shelf") { browser.toggleTabShelf() }
+                    .keyboardShortcut(.space, modifiers: .option)
+                    .disabled(!browser.prefs.gestureTabs || browser.tuning || browser.welcoming)
+                Divider()
                 Toggle("Show Tabs in Sidebar", isOn: Binding(
                     get: { browser.prefs.sidebar },
                     set: { _ in browser.toggleSidebar() }
@@ -392,7 +396,7 @@ struct ContentView: View {
                     .transition(.move(edge: sideOnRight ? .trailing : .leading))
             }
 
-            if !browser.prefs.sidebar, !browser.folded, fullscreenTab == nil {
+            if !browser.prefs.gestureTabs, !browser.prefs.sidebar, !browser.folded, fullscreenTab == nil {
                 TabBar(browser: browser)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -601,7 +605,7 @@ struct ContentView: View {
         window_
             // The column folded away, and out again at the edge (see Fold.swift).
             .overlay(alignment: sideOnRight ? .trailing : .leading) {
-                if fullscreenTab == nil { Fold(browser: browser, prefs: browser.prefs) }
+                if fullscreenTab == nil, !browser.prefs.gestureTabs { Fold(browser: browser, prefs: browser.prefs) }
             }
             .overlay(alignment: .bottom) { bars }
             .overlay {
@@ -626,6 +630,10 @@ struct ContentView: View {
             // there is to watch.
             .animation(browser.fieldShowing ? Motion.settle : Motion.quick, value: browser.fieldShowing)
             .background(WindowSetup { window = $0; dress($0) })
+            .onChange(of: browser.prefs.gestureTabs) { _, _ in
+                browser.tabSwitcher.cancel()
+                DispatchQueue.main.async { Lights.refresh(window); measureLights() }
+            }
             .onChange(of: browser.prefs.sidebar) { _, _ in
                 DispatchQueue.main.async { Lights.refresh(window); measureLights() }
             }
@@ -856,13 +864,13 @@ struct ContentView: View {
 
     /// True while the tabs are down the left, and not folded away (see Fold.swift).
     private var sidebar: Bool {
-        browser.prefs.sidebar && !browser.folded && fullscreenTab == nil
+        !browser.prefs.gestureTabs && browser.prefs.sidebar && !browser.folded && fullscreenTab == nil
     }
 
     /// The column has its own corner for the lights, so the page beside it
     /// starts at the very top; the strip needs a band.
     private var band: CGFloat {
-        guard fullscreenTab == nil else { return 0 }
+        guard fullscreenTab == nil, !browser.prefs.gestureTabs else { return 0 }
         // Folded, the strip is out of the window and the page has its height.
         return browser.prefs.sidebar || browser.folded ? 0 : Metrics.strip
     }
@@ -944,7 +952,7 @@ struct ContentView: View {
         // Lights.swift. The column's first row is the strip's height too, so
         // its three doors sit on the lights' line.
         Lights.keep(window, centreX: {
-            browser.prefs.sidebar && browser.prefs.sidePosition == .right
+            !browser.prefs.gestureTabs && browser.prefs.sidebar && browser.prefs.sidePosition == .right
                 ? window.frame.width - browser.prefs.sideWidth + Lights.centre.x
                 : Lights.centre.x
         }) { measureLights() }
@@ -992,7 +1000,7 @@ struct ContentView: View {
             guard mine(event) else { return event }
             guard event.type == .keyDown else {
                 // ⌃ let go of switches to the tab the switcher is on.
-                if browser.tabSwitcher.active, !event.modifierFlags.contains(.control) {
+                if browser.tabSwitcher.active, !browser.tabSwitcher.gesture, !event.modifierFlags.contains(.control) {
                     browser.commitTabSwitch()
                 }
                 // ⌘ let go of ends a ⌘K walk, wherever it stopped.
@@ -1104,6 +1112,32 @@ struct ContentView: View {
         let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
         let controlTab = event.keyCode == 48 && flags.contains(.control)
             && flags.isDisjoint(with: [.command, .option])
+
+        if event.keyCode == 49, flags.intersection([.command, .control, .option, .shift]) == .option,
+           browser.prefs.gestureTabs, canSwitchTabs(event) {
+            if !event.isARepeat { browser.toggleTabShelf() }
+            return true
+        }
+        if browser.tabSwitcher.gesture {
+            switch event.keyCode {
+            case 53: browser.tabSwitcher.cancel(); return true
+            case 36, 76: browser.commitTabSwitch(); return true
+            case 123: browser.tabSwitcher.move(.left)
+            case 124: browser.tabSwitcher.move(.right)
+            case 125: browser.tabSwitcher.move(.down)
+            case 126: browser.tabSwitcher.move(.up)
+            default:
+                browser.tabSwitcher.cancel()
+                if key == "s", flags.isDisjoint(with: [.command, .control, .option]) {
+                    browser.settingsPage = .tabs
+                    browser.tuning = true
+                    return true
+                }
+                return take(event)
+            }
+            browser.tabSwitcher.gesturePointer.centerSelection()
+            return true
+        }
 
         // While the tab switcher is up, ⌃ and the arrows move through it and
         // ⌃Tab goes on below; any other key puts it away, and Escape does

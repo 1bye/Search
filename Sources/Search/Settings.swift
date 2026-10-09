@@ -396,6 +396,23 @@ struct SettingsPanel: View {
 
     private var tabs: some View {
         Card {
+            Line("Gesture tabs", "Hide the tab bar and sidebar. ⌥Space opens the shelf; move to a tab, then click or press Return. Esc puts it away.") {
+                Switch(on: $prefs.gestureTabs)
+                    .accessibilityRepresentation { Toggle("Gesture tabs", isOn: $prefs.gestureTabs) }
+            }
+            if prefs.gestureTabs {
+                Rule()
+                Line("Pointer speed", String(format: "%.1f× · how far a finger movement travels", prefs.gestureSpeed)) {
+                    Slider(value: $prefs.gestureSpeed, in: 0.5...8, step: 0.1)
+                        .frame(width: 150).accessibilityLabel("Pointer speed")
+                }
+                Rule()
+                Line("Magnetic attraction", "\(Int(prefs.gesturePull * 100))% · gently settle at a tab's center when you slow down. Zero turns it off.") {
+                    Slider(value: $prefs.gesturePull, in: 0...1, step: 0.05)
+                        .frame(width: 150).accessibilityLabel("Magnetic attraction")
+                }
+            }
+            Rule()
             Line("Tabs in a sidebar", "Down the \(prefs.sidePosition.rawValue) instead of across the top. Pull its edge to make it wider; double-click the edge to reset.") {
                 Switch(on: Binding(
                     get: { prefs.sidebar },

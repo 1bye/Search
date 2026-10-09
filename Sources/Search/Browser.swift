@@ -3275,7 +3275,7 @@ final class Browser: NSObject, ObservableObject {
     /// a ⌃-click is a right-click to AppKit, not a click the card's button
     /// can be counted on to take. From #358, by oddharsh.
     func clickTabSwitcher(at point: CGPoint) -> Bool {
-        guard tabSwitcher.visible else { return false }
+        guard tabSwitcher.visible, !tabSwitcher.gesture else { return false }
         guard tabSwitcher.panelFrame.contains(point) else {
             tabSwitcher.cancel()
             return true
@@ -3283,6 +3283,17 @@ final class Browser: NSObject, ObservableObject {
         // Between two cards: the switcher's, and nothing happens.
         if let id = tabSwitcher.card(at: point) { commitTabSwitch(picking: id) }
         return true
+    }
+
+    func toggleTabShelf() {
+        if tabSwitcher.gesture { tabSwitcher.cancel(); return }
+        guard prefs.gestureTabs, let activeID, !tuning, !recalling, !hoarding, !bookmarking,
+              !welcoming, !managing, !reviewing, !bookmarksOpen, !veiling, !summoning,
+              !makingSpace, peekTab == nil, editingTab == nil, asking == nil,
+              offering == nil, suggesting == nil else { return }
+        tabSwitcher.partners = prefs.splitView
+            ? Dictionary(splits.map { ($0.left, $0.right) }, uniquingKeysWith: { first, _ in first }) : [:]
+        tabSwitcher.openShelf(row: tabs.filter(standsInRow).map(\.id), current: activeSplit?.left ?? activeID)
     }
 
     func commitTabSwitch(picking id: Tab.ID? = nil) {

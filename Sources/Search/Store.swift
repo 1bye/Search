@@ -108,8 +108,8 @@ enum Store {
     static let folder: URL = {
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let home = support.appendingPathComponent(world.map { "Search (\($0))" } ?? "Search", isDirectory: true)
-        if !testing {
+        let home = support.appendingPathComponent(world.map { "Search-1bye (\($0))" } ?? "Search-1bye", isDirectory: true)
+        if !testing, !ownContainer {
             let old = support.appendingPathComponent("Office Browser", isDirectory: true)
             let files = FileManager.default
             if !files.fileExists(atPath: home.path), files.fileExists(atPath: old.path) {
@@ -141,10 +141,10 @@ enum Store {
     /// where the tabs go must not change yours.
     static let settings: UserDefaults = {
         guard testing else {
-            carryOver(into: .standard)
+            if !ownContainer { carryOver(into: .standard) }
             return .standard
         }
-        let suite = world == "test" ? "com.officecommun.search.test" : "com.officecommun.search.test.\(world ?? "")"
+        let suite = world == "test" ? "com.1bye.search.test" : "com.1bye.search.test.\(world ?? "")"
         return UserDefaults(suiteName: suite) ?? .standard
     }()
 
