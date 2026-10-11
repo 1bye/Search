@@ -204,59 +204,43 @@ struct GestureShelf: View {
     @ObservedObject var browser: Browser
     @ObservedObject var switcher: TabSwitcher
     @ObservedObject var pointer: GestureShelfState
-    @ObservedObject var prefs: Preferences
 
     var body: some View {
         GeometryReader { geometry in
             let columns = min(5, switcher.candidates.count)
             let width = min(CGFloat(columns) * 176 + CGFloat(columns - 1) * 8, geometry.size.width - 48)
             let tentative = ShelfLayout(count: switcher.candidates.count, size: CGSize(width: width, height: 1))
-            let height = min(tentative.contentHeight, max(140, geometry.size.height - 148))
+            let height = min(tentative.contentHeight, max(140, geometry.size.height - 84))
             let layout = ShelfLayout(count: switcher.candidates.count, size: CGSize(width: width, height: height))
             ZStack {
                 Color.black.opacity(0.24).ignoresSafeArea().onTapGesture { switcher.cancel() }
-                VStack(spacing: 14) {
-                    HStack {
-                        Text("Tabs").font(.system(size: 17, weight: .medium))
-                        Text("\(switcher.candidates.count)").foregroundStyle(Palette.muted)
-                        Spacer()
-                        Text("Move freely · pause to settle").foregroundStyle(Palette.muted)
-                    }
-                    ZStack(alignment: .topLeading) {
-                        ForEach(Array(switcher.candidates.enumerated()), id: \.element) { index, id in
-                            if let tab = browser.tabs.first(where: { $0.id == id }) {
-                                let frame = layout.frame(index, scroll: pointer.scroll)
-                                TabSwitcherCard(browser: browser, switcher: switcher, tab: tab,
-                                                width: layout.cardWidth, previewHeight: layout.previewHeight,
-                                                height: layout.cardHeight)
-                                    .background(RoundedRectangle(cornerRadius: 8)
-                                        .fill(id == switcher.selectedID ? Palette.faint : Color.clear))
-                                    .position(x: frame.midX, y: frame.midY)
-                            }
-                        }
-                        if pointer.captured {
-                            Circle().fill(Color(red: 0.83, green: 1, blue: 0.9))
-                                .frame(width: 11, height: 11)
-                                .overlay(Circle().stroke(Color.black.opacity(0.5), lineWidth: 1))
-                                .background(Circle().fill(Color.green.opacity(0.18)).padding(-5))
-                                .shadow(color: .black.opacity(0.25), radius: 4, y: 1)
-                                .position(pointer.point)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(switcher.candidates.enumerated()), id: \.element) { index, id in
+                        if let tab = browser.tabs.first(where: { $0.id == id }) {
+                            let frame = layout.frame(index, scroll: pointer.scroll)
+                            TabSwitcherCard(browser: browser, switcher: switcher, tab: tab,
+                                            width: layout.cardWidth, previewHeight: layout.previewHeight,
+                                            height: layout.cardHeight)
+                                .background(RoundedRectangle(cornerRadius: 8)
+                                    .fill(id == switcher.selectedID ? Palette.faint : Color.clear))
+                                .position(x: frame.midX, y: frame.midY)
                         }
                     }
-                    .frame(width: width, height: height)
-                    .clipped()
-                    .onAppear { pointer.start(browser: browser, size: layout.size) }
-                    .onChange(of: layout.size) { _, size in pointer.resize(size) }
-                    HStack {
-                        Text("Click to open · \(prefs.gestureFingers)-finger swipe down to close")
-                        Spacer()
-                        Text("S  Settings · two fingers to scroll")
+                    if pointer.captured {
+                        Circle().fill(Color(red: 0.83, green: 1, blue: 0.9))
+                            .frame(width: 11, height: 11)
+                            .overlay(Circle().stroke(Color.black.opacity(0.5), lineWidth: 1))
+                            .background(Circle().fill(Color.green.opacity(0.18)).padding(-5))
+                            .shadow(color: .black.opacity(0.25), radius: 4, y: 1)
+                            .position(pointer.point)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.muted)
                 }
+                .frame(width: width, height: height)
+                .clipped()
+                .onAppear { pointer.start(browser: browser, size: layout.size) }
+                .onChange(of: layout.size) { _, size in pointer.resize(size) }
                 .padding(18)
                 .frame(width: width + 36)
                 .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16))

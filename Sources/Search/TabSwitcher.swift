@@ -232,7 +232,7 @@ struct TabSwitcherOverlay: View {
 
     var body: some View {
         if switcher.visible, switcher.gesture {
-            GestureShelf(browser: browser, switcher: switcher, pointer: switcher.gesturePointer, prefs: browser.prefs)
+            GestureShelf(browser: browser, switcher: switcher, pointer: switcher.gesturePointer)
         } else if switcher.visible {
             GeometryReader { geometry in
                 let columns = min(5, switcher.candidates.count)
