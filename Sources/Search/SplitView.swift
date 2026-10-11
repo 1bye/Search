@@ -32,7 +32,8 @@ struct SplitStage: View {
                     }
                 },
                 hover: { hovered = $0 },
-                find: browser.finding ? browser : nil
+                find: browser.finding ? browser : nil,
+                transition: browser.prefs.pageTransition, direction: browser.pageTransitionDirection
             )
             ForEach(shown) { tab in
                 if let frame = frames[tab.id] {

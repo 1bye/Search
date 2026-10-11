@@ -14,6 +14,8 @@ struct Page: View {
     /// False where the page itself is held elsewhere (see PaneStage.swift)
     /// and only what goes over it is wanted here.
     var holdsPage = true
+    var transition: PageTransition = .none
+    var direction: CGFloat = 1
 
     var body: some View {
         ZStack {
@@ -25,7 +27,8 @@ struct Page: View {
             // the stage was never told to take it back when it landed, and
             // the tab stayed empty. Nothing, then the page, is a change.
             if holdsPage {
-                WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web)
+                WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web,
+                         transition: transition, selection: tab.id, direction: direction)
             }
 
             if let cover = tab.cover {
@@ -200,16 +203,20 @@ private struct HistoryList: View {
 /// reload, no lost scroll position, no forgotten form.
 struct WebStage: NSViewRepresentable {
     let page: NSView?
+    var transition: PageTransition = .none
+    var selection: Tab.ID? = nil
+    var direction: CGFloat = 1
 
     func makeNSView(context: Context) -> StageView { StageView() }
 
     func updateNSView(_ view: StageView, context: Context) {
-        view.show(page)
+        view.show(page, transition: transition, selection: selection, direction: direction)
     }
 }
 
 final class StageView: NSView {
-    /// What this stage has been told to show, and the only thing it keeps.
+    /// What this stage has been told to show. A cube turn briefly keeps the
+    /// departing page too, until its animation finishes or is interrupted.
     ///
     /// It used to track that *and* what it was holding, and reconcile the two.
     /// One divergence between them — a page taken by the floating window, a tab
@@ -221,6 +228,11 @@ final class StageView: NSView {
     /// Now there is one fact and one rule: show `wanted`, and put that right on
     /// every layout. Nothing to fall out of step with.
     private weak var wanted: NSView?
+    private var selection: Tab.ID?
+    private var turningFrom: NSView?
+    private var turnSize = CGSize.zero
+    private var turnEnd: DispatchWorkItem?
+    private var shades: [CALayer] = []
 
     /// The Web Inspector each page off show had docked beside it. WebKit
     /// docks it once, on show; a page coming back without it was laid out
@@ -231,7 +243,19 @@ final class StageView: NSView {
 
     override func layout() {
         super.layout()
+        if turningFrom != nil, bounds.size != turnSize { finishTurn() }
         settle()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { finishTurn() }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // The live page's input coordinates stay still while its picture rotates.
+        if turningFrom != nil, frame.contains(point) { return self }
+        return super.hitTest(point)
     }
 
     /// A key the page didn't use, stopped here. WebKit gives such a key back
@@ -249,13 +273,72 @@ final class StageView: NSView {
         guard wanted != nil else { return super.keyDown(with: event) }
     }
 
-    func show(_ page: NSView?) {
+    func show(_ page: NSView?, transition: PageTransition = .none,
+              selection: Tab.ID? = nil, direction: CGFloat = 1) {
+        if wanted !== page || transition == .none { finishTurn() }
+        let leaving = wanted
+        let canTurn = transition == .cube && !Motion.reduced && window != nil
+            && selection != nil && self.selection != nil && selection != self.selection
+            && bounds.width > 0 && bounds.height > 0 && leaving?.superview === self
+            && leaving !== page && page != nil && !inspecting
+            && page.map({ Self.docks.object(forKey: $0) == nil }) == true
+            && ((leaving as? WKWebView)?.fullscreenState ?? .notInFullscreen) == .notInFullscreen
+            && ((page as? WKWebView)?.fullscreenState ?? .notInFullscreen) == .notInFullscreen
+            && (page as? PageView)?.unpainted != true
+        if canTurn { turningFrom = leaving }
         if let leaving = wanted, leaving !== page, let dock = subviews.first(where: Self.isInspector) {
             Self.docks.setObject(dock, forKey: leaving)
             dock.removeFromSuperview()
         }
         wanted = page
+        self.selection = selection
         settle()
+        if canTurn, let leaving, let page { startTurn(from: leaving, to: page, direction: direction) }
+    }
+
+    private func startTurn(from old: NSView, to page: NSView, direction: CGFloat) {
+        wantsLayer = true
+        layer?.masksToBounds = true
+        layer?.backgroundColor = Palette.NS.ground.cgColor
+        turnSize = bounds.size
+        if let responder = window?.firstResponder as? NSView, responder.isDescendant(of: old) {
+            window?.makeFirstResponder(page)
+        }
+        for (view, incoming) in [(old, false), (page, true)] {
+            view.wantsLayer = true
+            guard let face = view.layer else { continue }
+            face.add(PageCube.animation(incoming: incoming, direction: direction, size: turnSize,
+                                        anchor: face.anchorPoint), forKey: "pageCube")
+            let shade = CALayer()
+            shade.frame = face.bounds
+            shade.backgroundColor = NSColor.black.cgColor
+            shade.opacity = 0
+            face.addSublayer(shade)
+            let dim = CABasicAnimation(keyPath: "opacity")
+            dim.fromValue = incoming ? 0.22 : 0
+            dim.toValue = incoming ? 0 : 0.22
+            dim.duration = PageCube.duration
+            dim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            dim.fillMode = .both
+            dim.isRemovedOnCompletion = false
+            shade.add(dim, forKey: "shade")
+            shades.append(shade)
+        }
+        let end = DispatchWorkItem { [weak self] in self?.finishTurn() }
+        turnEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + PageCube.duration, execute: end)
+    }
+
+    private func finishTurn() {
+        turnEnd?.cancel()
+        turnEnd = nil
+        guard let old = turningFrom else { return }
+        old.layer?.removeAnimation(forKey: "pageCube")
+        wanted?.layer?.removeAnimation(forKey: "pageCube")
+        shades.forEach { $0.removeFromSuperlayer() }
+        shades.removeAll()
+        turningFrom = nil
+        if old !== wanted, old.superview === self { old.removeFromSuperview() }
     }
 
     private func settle() {
@@ -272,7 +355,7 @@ final class StageView: NSView {
         // web view, and shrinks the page to make room. Taken out on the next
         // resize, it left the page shrunk beside nothing (#91).
         let docked = inspecting
-        for view in subviews where view !== wanted && !(docked && Self.isInspector(view)) {
+        for view in subviews where view !== wanted && view !== turningFrom && !(docked && Self.isInspector(view)) {
             view.removeFromSuperview()
         }
 

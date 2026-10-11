@@ -426,7 +426,7 @@ struct ContentView: View {
         if browser.prefs.splitView {
             SplitStage(browser: browser)
         } else if let tab = browser.active {
-            Page(tab: tab)
+            Page(tab: tab, transition: browser.prefs.pageTransition, direction: browser.pageTransitionDirection)
                 .overlay {
                     if browser.prefs.showsLinks { LinkBubble(status: browser.linkStatus) }
                 }

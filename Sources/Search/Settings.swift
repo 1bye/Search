@@ -396,6 +396,15 @@ struct SettingsPanel: View {
 
     private var tabs: some View {
         Card {
+            Line("Page transition") {
+                Segmented(options: PageTransition.allCases.map { ($0, $0.title) }, selection: $prefs.pageTransition)
+                    .accessibilityRepresentation {
+                        Picker("Page transition", selection: $prefs.pageTransition) {
+                            ForEach(PageTransition.allCases) { Text($0.title).tag($0) }
+                        }.pickerStyle(.segmented)
+                    }
+            }
+            Rule()
             Line("Gesture tabs", "Hide the tab bar and sidebar. Swipe down, then release. Touch down with one finger, move, and lift to choose. Swipe down again or two-finger click to dismiss.") {
                 Switch(on: $prefs.gestureTabs)
                     .accessibilityRepresentation { Toggle("Gesture tabs", isOn: $prefs.gestureTabs) }

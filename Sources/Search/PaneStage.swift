@@ -25,6 +25,8 @@ struct PaneStageView: NSViewRepresentable {
     let action: (PaneStage.Action) -> Void
     let hover: (Tab.ID?) -> Void
     var find: Browser? = nil
+    var transition: PageTransition = .none
+    var direction: CGFloat = 1
 
     func makeNSView(context: Context) -> PaneStage { PaneStage() }
 
@@ -34,12 +36,17 @@ struct PaneStageView: NSViewRepresentable {
         stage.onFrames = frames
         stage.onAction = action
         stage.onHover = hover
+        stage.pageTransition = transition
+        stage.pageTransitionDirection = direction
         stage.show(tabs, split: split, focused: focused)
         stage.showFind(find)
     }
 }
 
 final class PaneStage: NSView {
+    var pageTransition: PageTransition = .none
+    var pageTransitionDirection: CGFloat = 1
+    private var tabTransition: PageTransition = .none
     var onCommit: ((UUID, [Double]) -> Void)?
     var onFocus: ((Tab) -> Void)?
     /// Where each page is, from the top left, each time that changes — never
@@ -129,10 +136,13 @@ final class PaneStage: NSView {
     // MARK: - what is shown
 
     func show(_ tabs: [Tab], split: TabSplit?, focused: Tab.ID?) {
+        // Split layout changes already have their own movement.
+        tabTransition = tabs.count == 1 && self.tabs.count == 1 && split == nil && self.split == nil
+            ? pageTransition : .none
         // A change the eye should follow — a page arriving beside another,
         // one leaving, the two swapping, the divider moving by itself — is
-        // shown moving (see `animate`). Anything else, a tab switch among
-        // them, is a cut, as it always was.
+        // shown moving (see `animate`). A single-page tab switch uses the
+        // transition in its StageView instead.
         guard let move = motion(to: tabs, split: split), window != nil else {
             // The same pages again — SwiftUI asking once more — leave a move
             // under way alone; different ones cut it short.
@@ -217,7 +227,8 @@ final class PaneStage: NSView {
             let id = wanted.map(ObjectIdentifier.init)
             guard fed[index] != id else { continue }
             fed[index] = id
-            slot.show(wanted)
+            slot.show(wanted, transition: tabTransition, selection: index < tabs.count ? tabs[index].id : nil,
+                      direction: pageTransitionDirection)
         }
     }
 

@@ -46,6 +46,7 @@ final class Browser: NSObject, ObservableObject {
     /// Named tab sections in the current space, in display order.
     @Published var tabGroups: [TabGroup] = []
     @Published var editingGroupID: UUID?
+    private(set) var pageTransitionDirection: CGFloat = 1
     @Published var activeID: Tab.ID? {
         didSet {
             // The tab just left is the tab just looked at. Whether a tab has
@@ -56,6 +57,10 @@ final class Browser: NSObject, ObservableObject {
                 DispatchQueue.main.async { held.forEach { $0.present() } }
             }
             guard oldValue != activeID else { return }
+            if let from = tabs.firstIndex(where: { $0.id == oldValue }),
+               let to = tabs.firstIndex(where: { $0.id == activeID }) {
+                pageTransitionDirection = to > from ? 1 : -1
+            }
             // What was found belongs to the page just left; the words typed
             // go on to be looked for on this one.
             invalidateFindPage(retryOnActiveTab: true)

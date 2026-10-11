@@ -82,6 +82,9 @@ final class Preferences: ObservableObject {
     @Published var gesturePull: Double {
         didSet { store.set(gesturePull, forKey: "tabs.gesture.pull") }
     }
+    @Published var pageTransition: PageTransition {
+        didSet { store.set(pageTransition.rawValue, forKey: "pages.transition") }
+    }
     /// Which side the column is on when it is shown vertically.
     @Published var sidePosition: SidebarPosition {
         didSet { store.set(sidePosition.rawValue, forKey: "sidebar.position") }
@@ -393,6 +396,7 @@ final class Preferences: ObservableObject {
         gestureFingers = store.integer(forKey: "tabs.gesture.fingers") == 4 ? 4 : 3
         gestureSpeed = min(8, max(0.5, store.object(forKey: "tabs.gesture.speed") as? Double ?? 4))
         gesturePull = min(1, max(0, store.object(forKey: "tabs.gesture.pull") as? Double ?? 0.35))
+        pageTransition = store.string(forKey: "pages.transition").flatMap(PageTransition.init(rawValue:)) ?? .none
         sidePosition = store.string(forKey: "sidebar.position").flatMap(SidebarPosition.init) ?? .left
         sideHides = store.bool(forKey: "sidebar.hides")
         let width = store.object(forKey: "sidebar.width") as? Double ?? Double(Metrics.side)
