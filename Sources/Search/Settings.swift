@@ -396,7 +396,7 @@ struct SettingsPanel: View {
 
     private var tabs: some View {
         Card {
-            Line("Gesture tabs", "Hide the tab bar and sidebar. Swipe down to open the shelf. Move with one finger, then lift to choose. Swipe down again or two-finger click to dismiss.") {
+            Line("Gesture tabs", "Hide the tab bar and sidebar. Swipe down, then release. Touch down with one finger, move, and lift to choose. Swipe down again or two-finger click to dismiss.") {
                 Switch(on: $prefs.gestureTabs)
                     .accessibilityRepresentation { Toggle("Gesture tabs", isOn: $prefs.gestureTabs) }
             }

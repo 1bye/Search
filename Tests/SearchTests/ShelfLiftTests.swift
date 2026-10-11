@@ -19,9 +19,22 @@ final class ShelfLiftTests: XCTestCase {
         }
     }
 
+    func testLastOpeningFingerCanDriftBeforeLiftingWithoutSelecting() {
+        for count in [3, 4] {
+            var lift = ShelfLiftDetector()
+            XCTAssertFalse(lift.update(contacts(count)))
+            for remaining in (1..<count).reversed() {
+                XCTAssertFalse(lift.update(contacts(remaining), ended: [AnyHashable(remaining + 1)]))
+            }
+            XCTAssertFalse(lift.update(contacts(1, x: 2)))
+            XCTAssertFalse(lift.update(contacts(1, x: 5)))
+            XCTAssertFalse(lift.update([:], ended: [1]))
+        }
+    }
+
     func testMovingThenLiftingTheSameFingerSelectsOnce() {
         var lift = ShelfLiftDetector()
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 2)))
         XCTAssertFalse(lift.update(contacts(1, x: 2)))
         XCTAssertFalse(lift.update(contacts(1, x: 2), ended: [9]))
@@ -31,31 +44,35 @@ final class ShelfLiftTests: XCTestCase {
 
     func testTappingOrTinyJitterDoesNotSelect() {
         var lift = ShelfLiftDetector()
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update([:], ended: [1]))
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 0.2)))
         XCTAssertFalse(lift.update(contacts(1, x: -0.2)))
         XCTAssertFalse(lift.update([:], ended: [1]))
     }
 
-    func testSecondFingerDisarmsSelectionAndOneFingerCanResume() {
+    func testSecondFingerDisarmsSelectionUntilFreshOneFingerTouch() {
         var lift = ShelfLiftDetector()
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 5)))
-        XCTAssertFalse(lift.update(contacts(2, x: 5)))
+        XCTAssertFalse(lift.update(contacts(2, x: 5), began: [2]))
         XCTAssertFalse(lift.update(contacts(2, x: 30)))
         XCTAssertFalse(lift.update(contacts(1, x: 30), ended: [2]))
+        XCTAssertFalse(lift.update(contacts(1, x: 35)))
         XCTAssertFalse(lift.update([:], ended: [1]))
-        XCTAssertFalse(lift.update(contacts(2)))
+        XCTAssertFalse(lift.update(contacts(2), began: [1, 2]))
         XCTAssertFalse(lift.update(contacts(1), ended: [2]))
+        XCTAssertFalse(lift.update(contacts(1, x: 2)))
+        XCTAssertFalse(lift.update([:], ended: [1]))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 2)))
         XCTAssertTrue(lift.update([:], ended: [1]))
     }
 
     func testRestingIsNotLiftingAndRestingThumbDoesNotBlockSelection() {
         var lift = ShelfLiftDetector()
-        XCTAssertFalse(lift.update(contacts(2), resting: [2]))
+        XCTAssertFalse(lift.update(contacts(2), resting: [2], began: [1, 2]))
         XCTAssertFalse(lift.update(contacts(2, x: 5), resting: [2]))
         XCTAssertFalse(lift.update(contacts(2, x: 5), resting: [1, 2]))
         XCTAssertFalse(lift.update(contacts(2, x: 5), resting: [1, 2]))
@@ -65,14 +82,17 @@ final class ShelfLiftTests: XCTestCase {
 
     func testCancellationMissingTouchesAndResetNeverSelect() {
         var lift = ShelfLiftDetector()
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
+        XCTAssertFalse(lift.update(contacts(1, x: 5)))
+        XCTAssertFalse(lift.update(contacts(1, x: 5), cancelled: true))
         XCTAssertFalse(lift.update(contacts(1)))
         XCTAssertFalse(lift.update(contacts(1, x: 5)))
-        XCTAssertFalse(lift.update([:], ended: [1], cancelled: true))
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update([:], ended: [1]))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 5)))
         XCTAssertFalse(lift.update([:]))
         XCTAssertFalse(lift.update([:], ended: [1]))
-        XCTAssertFalse(lift.update(contacts(1)))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
         XCTAssertFalse(lift.update(contacts(1, x: 5)))
         lift.reset()
         XCTAssertFalse(lift.update([:], ended: [1]))
@@ -80,9 +100,19 @@ final class ShelfLiftTests: XCTestCase {
 
     func testAReplacementFingerCannotInheritSelection() {
         var lift = ShelfLiftDetector()
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
+        XCTAssertFalse(lift.update(contacts(1, x: 5)))
+        XCTAssertFalse(lift.update([2: CGPoint(x: 40, y: 50)], began: [2], ended: [1]))
+        XCTAssertFalse(lift.update([:], ended: [2]))
+    }
+
+    func testStartingMidContactWaitsForAFreshTouch() {
+        var lift = ShelfLiftDetector()
         XCTAssertFalse(lift.update(contacts(1)))
         XCTAssertFalse(lift.update(contacts(1, x: 5)))
-        XCTAssertFalse(lift.update([2: CGPoint(x: 40, y: 50)], ended: [1]))
-        XCTAssertFalse(lift.update([:], ended: [2]))
+        XCTAssertFalse(lift.update([:], ended: [1]))
+        XCTAssertFalse(lift.update(contacts(1), began: [1]))
+        XCTAssertFalse(lift.update(contacts(1, x: 5)))
+        XCTAssertTrue(lift.update([:], ended: [1]))
     }
 }

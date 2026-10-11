@@ -3,21 +3,30 @@ import AppKit
 /// Match each finger, so adding a finger or pinching cannot look like a swipe.
 struct ShelfSwipeDetector {
     private var origins: [AnyHashable: CGPoint] = [:]
+    private var participants: Set<AnyHashable> = []
     private var blocked = false
     private var fired = false
 
     mutating func reset() { self = Self() }
 
-    mutating func update(_ touches: [AnyHashable: CGPoint], fingers: Int) -> Bool {
-        guard !touches.isEmpty else { reset(); return false }
+    mutating func update(_ touches: [AnyHashable: CGPoint], fingers: Int,
+                         resting: Set<AnyHashable> = []) -> Bool {
+        let active = touches.filter { !resting.contains($0.key) }
+        // Resting swipe fingers are still down. An unrelated resting thumb can stay down.
+        if participants.isDisjoint(with: Set(touches.keys)) { reset() }
+        participants.formUnion(active.keys)
         guard !blocked, !fired else { return false }
-        guard touches.count == fingers else {
-            if touches.count > fingers || !origins.isEmpty { blocked = true }
+        guard active.count == fingers else {
+            if active.count > fingers || !origins.isEmpty { blocked = true }
             return false
         }
-        guard !origins.isEmpty else { origins = touches; return false }
-        guard Set(origins.keys) == Set(touches.keys) else { blocked = true; return false }
-        let deltas = touches.map { id, point in
+        guard !origins.isEmpty else {
+            origins = active
+            participants = Set(active.keys)
+            return false
+        }
+        guard Set(origins.keys) == Set(active.keys) else { blocked = true; return false }
+        let deltas = active.map { id, point in
             CGPoint(x: point.x - origins[id]!.x, y: point.y - origins[id]!.y)
         }
         let dx = deltas.reduce(0) { $0 + $1.x } / CGFloat(fingers)
@@ -38,7 +47,8 @@ struct ShelfLiftDetector {
     mutating func reset() { self = Self() }
 
     mutating func update(_ touches: [AnyHashable: CGPoint], resting: Set<AnyHashable> = [],
-                         ended: Set<AnyHashable> = [], cancelled: Bool = false) -> Bool {
+                         began: Set<AnyHashable> = [], ended: Set<AnyHashable> = [],
+                         cancelled: Bool = false) -> Bool {
         guard !cancelled else { reset(); return false }
         let active = touches.filter { !resting.contains($0.key) }
         guard active.count <= 1 else { reset(); return false }
@@ -54,9 +64,11 @@ struct ShelfLiftDetector {
             return false
         }
         if finger != id {
+            reset()
+            // A finger left over from opening or scrolling cannot become a selection gesture.
+            guard began.contains(id) else { return false }
             finger = id
             origin = point
-            armed = false
         } else if hypot(point.x - origin.x, point.y - origin.y) >= 1 {
             armed = true
         }
@@ -87,21 +99,24 @@ final class TrackpadShelfSwipe {
         let recognized: Bool
         switch event.type {
         case .gesture:
-            if !event.touches(matching: .any, in: nil).isEmpty { receivesTouches = true }
+            guard !event.touches(matching: .any, in: nil).isEmpty else { return false }
+            receivesTouches = true
             if browser.tabSwitcher.gesturePointer.takeLift(event) {
                 browser.commitTabSwitch()
                 detector.reset()
                 return true
             }
             if !event.touches(matching: .cancelled, in: nil).isEmpty { detector.reset(); return false }
-            let active = event.touches(matching: .touching, in: nil).filter { $0.type == .indirect && !$0.isResting }
+            let touching = event.touches(matching: .touching, in: nil).filter { $0.type == .indirect }
             var positions: [AnyHashable: CGPoint] = [:]
-            for touch in active {
+            var resting: Set<AnyHashable> = []
+            for touch in touching {
                 guard let id = touch.identity as? AnyHashable else { continue }
                 positions[id] = CGPoint(x: touch.normalizedPosition.x * touch.deviceSize.width,
                                         y: touch.normalizedPosition.y * touch.deviceSize.height)
+                if touch.isResting { resting.insert(id) }
             }
-            recognized = detector.update(positions, fingers: fingers)
+            recognized = detector.update(positions, fingers: fingers, resting: resting)
         case .swipe:
             // Use the standard three-finger swipe only when raw touches are unavailable.
             // Otherwise its later arrival could toggle the shelf twice in one swipe.

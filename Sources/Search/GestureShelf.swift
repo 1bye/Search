@@ -151,10 +151,12 @@ final class GestureShelfState: ObservableObject {
                                     y: touch.normalizedPosition.y * touch.deviceSize.height)
             if touch.isResting { resting.insert(id) }
         }
+        let began = Set(event.touches(matching: .began, in: nil)
+            .filter { $0.type == .indirect }.compactMap { $0.identity as? AnyHashable })
         let ended = Set(event.touches(matching: .ended, in: nil)
             .filter { $0.type == .indirect }.compactMap { $0.identity as? AnyHashable })
         let cancelled = !event.touches(matching: .cancelled, in: nil).isEmpty
-        return lift.update(positions, resting: resting, ended: ended, cancelled: cancelled)
+        return lift.update(positions, resting: resting, began: began, ended: ended, cancelled: cancelled)
     }
 
     func resize(_ size: CGSize) {

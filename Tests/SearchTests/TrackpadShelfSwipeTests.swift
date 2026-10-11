@@ -27,6 +27,37 @@ final class TrackpadShelfSwipeTests: XCTestCase {
         XCTAssertFalse(swipe.update(contacts(2, dy: -60), fingers: 3))
     }
 
+    func testRestingSwipeFingersCannotTriggerAgainWithoutLifting() {
+        for count in [3, 4] {
+            var swipe = ShelfSwipeDetector()
+            let resting = Set((0..<count).map { AnyHashable($0) })
+            XCTAssertFalse(swipe.update(contacts(count), fingers: count))
+            XCTAssertTrue(swipe.update(contacts(count, dy: -9), fingers: count))
+            XCTAssertFalse(swipe.update(contacts(count, dy: -9), fingers: count, resting: resting))
+            XCTAssertFalse(swipe.update(contacts(count, dy: -9), fingers: count))
+            XCTAssertFalse(swipe.update(contacts(count, dy: -30), fingers: count))
+            XCTAssertFalse(swipe.update([:], fingers: count))
+            XCTAssertFalse(swipe.update(contacts(count), fingers: count))
+            XCTAssertTrue(swipe.update(contacts(count, dy: -9), fingers: count))
+        }
+    }
+
+    func testRestingThumbDoesNotPreventANewSwipeAfterSwipeFingersLift() {
+        var swipe = ShelfSwipeDetector()
+        let thumb: [AnyHashable: CGPoint] = [99: CGPoint(x: 90, y: 10)]
+        let start = contacts(3).merging(thumb) { point, _ in point }
+        let down = contacts(3, dy: -9).merging(thumb) { point, _ in point }
+        XCTAssertFalse(swipe.update(thumb, fingers: 3, resting: [99]))
+        XCTAssertFalse(swipe.update(start, fingers: 3, resting: [99]))
+        XCTAssertTrue(swipe.update(down, fingers: 3, resting: [99]))
+        XCTAssertFalse(swipe.update(down, fingers: 3, resting: [0, 1, 2, 99]))
+        XCTAssertFalse(swipe.update(start, fingers: 3, resting: [99]))
+        XCTAssertFalse(swipe.update(down, fingers: 3, resting: [99]))
+        XCTAssertFalse(swipe.update(thumb, fingers: 3, resting: [99]))
+        XCTAssertFalse(swipe.update(start, fingers: 3, resting: [99]))
+        XCTAssertTrue(swipe.update(down, fingers: 3, resting: [99]))
+    }
+
     func testFourFingerChoiceWaitsForAllFourFingers() {
         var swipe = ShelfSwipeDetector()
         XCTAssertFalse(swipe.update(contacts(3), fingers: 4))
