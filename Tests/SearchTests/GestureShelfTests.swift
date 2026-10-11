@@ -88,6 +88,90 @@ final class GestureShelfTests: XCTestCase {
         XCTAssertFalse(browser.tabSwitcher.newTabSelected)
     }
 
+    @MainActor
+    func testClosingHighlightedTabsKeepsShelfAndPicksNeighbours() {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let tabs = (0..<3).map { _ in Tab(bench: true) }
+        tabs.forEach { browser.receive($0) }
+        browser.select(tabs[1])
+        browser.tabSwitcher.openShelf(row: tabs.map(\.id), current: tabs[1].id)
+        browser.closeShelfTab()
+        XCTAssertEqual(browser.tabSwitcher.candidates, [tabs[0].id, tabs[2].id])
+        XCTAssertEqual(browser.tabSwitcher.selectedID, tabs[2].id)
+        XCTAssertTrue(browser.tabSwitcher.visible)
+        XCTAssertTrue(browser.tabSwitcher.gesture)
+        XCTAssertFalse(browser.tabs.contains { $0.id == tabs[1].id })
+        browser.closeShelfTab()
+        XCTAssertEqual(browser.tabSwitcher.candidates, [tabs[0].id])
+        XCTAssertEqual(browser.tabSwitcher.selectedID, tabs[0].id)
+        XCTAssertTrue(browser.tabSwitcher.visible)
+        browser.tabSwitcher.cancel()
+    }
+
+    @MainActor
+    func testClosingBackgroundTabDoesNotSwitchPageAndPlusDoesNothing() {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let tabs = (0..<3).map { _ in Tab(bench: true) }
+        tabs.forEach { browser.receive($0) }
+        browser.select(tabs[0])
+        browser.tabSwitcher.openShelf(row: tabs.map(\.id), current: tabs[0].id)
+        browser.tabSwitcher.pick(tabs[1].id)
+        browser.closeShelfTab()
+        XCTAssertEqual(browser.activeID, tabs[0].id)
+        XCTAssertEqual(browser.tabSwitcher.selectedID, tabs[2].id)
+        let count = browser.tabs.count
+        browser.tabSwitcher.pickNewTab()
+        browser.closeShelfTab()
+        XCTAssertEqual(browser.tabs.count, count)
+        XCTAssertTrue(browser.tabSwitcher.newTabSelected)
+        browser.tabSwitcher.cancel()
+    }
+
+    @MainActor
+    func testClosingLastPageLeavesBlankCardAndClosingBlankDismisses() throws {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let tab = Tab(bench: true)
+        browser.receive(tab)
+        tab.restore(url: URL(string: "about:blank")!, title: "Page")
+        browser.tabSwitcher.openShelf(row: [tab.id], current: tab.id)
+        browser.closeShelfTab()
+        XCTAssertEqual(browser.tabs.count, 1)
+        let blank = try XCTUnwrap(browser.active)
+        XCTAssertTrue(blank.isBlank)
+        XCTAssertNotEqual(blank.id, tab.id)
+        XCTAssertEqual(browser.tabSwitcher.candidates, [blank.id])
+        XCTAssertEqual(browser.tabSwitcher.selectedID, blank.id)
+        XCTAssertTrue(browser.tabSwitcher.gesture)
+        browser.closeShelfTab()
+        XCTAssertFalse(browser.tabSwitcher.visible)
+        XCTAssertFalse(browser.tabSwitcher.gesturePointer.captured)
+    }
+
+    @MainActor
+    func testClosingPinnedPageKeepsPinAndShelfOnNextCard() {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let pin = Tab(bench: true), other = Tab(bench: true)
+        browser.receive(pin)
+        browser.receive(other)
+        browser.select(pin)
+        pin.restore(url: URL(string: "about:blank")!, title: "Pinned")
+        pin.pin = "P"
+        browser.tabSwitcher.openShelf(row: [pin.id, other.id], current: pin.id)
+        browser.closeShelfTab()
+        XCTAssertTrue(browser.tabs.contains { $0 === pin })
+        XCTAssertTrue(pin.asleep)
+        XCTAssertEqual(browser.activeID, other.id)
+        XCTAssertEqual(browser.tabSwitcher.selectedID, other.id)
+        XCTAssertTrue(browser.tabSwitcher.visible)
+        XCTAssertTrue(browser.tabSwitcher.gesture)
+        pin.pin = nil
+        browser.tabSwitcher.cancel()
+    }
+
     func testEveryFastDeltaAppliesAndBreaksAwayFromAttraction() {
         let target = CGRect(x: 0, y: 0, width: 180, height: 140)
         var pointer = MagneticPointer(point: CGPoint(x: 90, y: 70))

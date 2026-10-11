@@ -83,13 +83,13 @@ final class Browser: NSObject, ObservableObject {
             // one entry, under its first page.
             if prefs.splitView, let pair = splits.first(where: { $0.contains(old) }) {
                 if let id = activeID, pair.contains(id) { return }
-                tabSwitcher.cancel()
+                if !closingShelfTab { tabSwitcher.cancel() }
                 if let first = tabs.first(where: { $0.id == pair.left }) {
                     tabSwitcher.left(first, alive: Set((tabs + parkedTabs).map(\.id)))
                 }
                 return
             }
-            tabSwitcher.cancel()
+            if !closingShelfTab { tabSwitcher.cancel() }
             if let left { tabSwitcher.left(left, alive: Set((tabs + parkedTabs).map(\.id))) }
         }
     }
@@ -138,6 +138,7 @@ final class Browser: NSObject, ObservableObject {
 
     let tabSwitcher = TabSwitcher()
     let trackpadShelfSwipe = TrackpadShelfSwipe()
+    private var closingShelfTab = false
 
     /// The tab whose page is currently out in the little window. Nothing
     /// floating means no window: the two are checked against each other rather
@@ -3311,6 +3312,27 @@ final class Browser: NSObject, ObservableObject {
         guard let target = tabSwitcher.finish(picking: id),
               let tab = tabs.first(where: { $0.id == target }) else { return }
         select(entry(tab))
+    }
+
+    func closeShelfTab() {
+        guard tabSwitcher.gesture, !tabSwitcher.newTabSelected, let id = tabSwitcher.selectedID,
+              let tab = tabs.first(where: { $0.id == id }),
+              let index = tabSwitcher.candidates.firstIndex(of: id) else { return }
+        if tabs.count == 1, tab.isBlank, tab.pin == nil {
+            tabSwitcher.cancel()
+            close(tab)
+            return
+        }
+        let next = tabSwitcher.candidates.dropFirst(index + 1).first
+            ?? tabSwitcher.candidates.prefix(index).last
+        // Closing the active page changes activeID; keep its shelf and captured pointer alive.
+        closingShelfTab = true
+        defer { closingShelfTab = false }
+        close(tab)
+        tabSwitcher.partners = prefs.splitView
+            ? Dictionary(splits.map { ($0.left, $0.right) }, uniquingKeysWith: { first, _ in first }) : [:]
+        tabSwitcher.refreshShelf(row: tabs.filter(standsInRow).map(\.id), preferred: next)
+        tabSwitcher.gesturePointer.refreshLayout()
     }
 
     /// A link opened from a page lands next to the page it came from, not at

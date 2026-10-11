@@ -77,6 +77,8 @@ final class GestureShelfState: ObservableObject {
     @Published private(set) var captured = false
     private var pointer = MagneticPointer(point: .zero)
     private var lift = ShelfLiftDetector()
+    private var tap = ShelfTapDetector()
+    private var lastClose: TimeInterval = -.infinity
     private var layout = ShelfLayout(count: 0, size: .zero)
     private weak var switcher: TabSwitcher?
     private weak var prefs: Preferences?
@@ -119,10 +121,20 @@ final class GestureShelfState: ObservableObject {
                 self.clampPointer()
                 self.choose()
                 self.point = self.pointer.point
-            case .leftMouseDown: browser.commitTabSwitch()
-            case .rightMouseDown: browser.tabSwitcher.cancel()
+            case .leftMouseDown:
+                if event.timestamp - self.lastClose > 0.35 { browser.commitTabSwitch() }
+            case .rightMouseDown:
+                // macOS can also send a secondary click for the raw two-finger tap.
+                if event.timestamp - self.lastClose > 0.35 {
+                    self.lastClose = event.timestamp
+                    self.tap.disqualify()
+                    self.lift.reset()
+                    browser.closeShelfTab()
+                }
             case .scrollWheel:
                 // Two fingers scroll the collection; one finger moves the pointer.
+                self.tap.disqualify()
+                self.lift.reset()
                 self.scroll = min(self.layout.maxScroll, max(0, self.scroll - event.scrollingDeltaY))
                 self.choose()
             default: break
@@ -141,7 +153,7 @@ final class GestureShelfState: ObservableObject {
         RunLoop.main.add(clock, forMode: .common)
     }
 
-    func takeLift(_ event: NSEvent) -> Bool {
+    func takeTouches(_ event: NSEvent, browser: Browser) -> Bool {
         guard captured, switcher?.gesture == true else { return false }
         var positions: [AnyHashable: CGPoint] = [:]
         var resting: Set<AnyHashable> = []
@@ -156,8 +168,26 @@ final class GestureShelfState: ObservableObject {
         let ended = Set(event.touches(matching: .ended, in: nil)
             .filter { $0.type == .indirect }.compactMap { $0.identity as? AnyHashable })
         let cancelled = !event.touches(matching: .cancelled, in: nil).isEmpty
-        return lift.update(positions, resting: resting, began: began, ended: ended, cancelled: cancelled)
+        var finalPositions: [AnyHashable: CGPoint] = [:]
+        for touch in event.touches(matching: .ended, in: nil) where touch.type == .indirect {
+            guard let id = touch.identity as? AnyHashable else { continue }
+            finalPositions[id] = CGPoint(x: touch.normalizedPosition.x * touch.deviceSize.width,
+                                         y: touch.normalizedPosition.y * touch.deviceSize.height)
+        }
+        if tap.update(positions, at: event.timestamp, resting: resting, began: began, ended: ended,
+                      finalPositions: finalPositions, cancelled: cancelled) {
+            lift.reset()
+            lastClose = event.timestamp
+            browser.closeShelfTab()
+            return true
+        }
+        guard lift.update(positions, resting: resting, began: began, ended: ended, cancelled: cancelled)
+        else { return false }
+        browser.commitTabSwitch()
+        return true
     }
+
+    func refreshLayout() { resize(layout.size) }
 
     func resize(_ size: CGSize) {
         guard size.width > 0, size.height > 0, let switcher else { return }
@@ -225,6 +255,8 @@ final class GestureShelfState: ObservableObject {
 
     func stop() {
         lift.reset()
+        tap.reset()
+        lastClose = -.infinity
         timer?.invalidate(); timer = nil
         if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil
         if let termination { NotificationCenter.default.removeObserver(termination) }; termination = nil
@@ -296,6 +328,7 @@ struct GestureShelf: View {
                 .clipped()
                 .onAppear { pointer.start(browser: browser, size: layout.size) }
                 .onChange(of: layout.size) { _, size in pointer.resize(size) }
+                .onChange(of: switcher.candidates) { _, _ in pointer.resize(layout.size) }
                 .padding(18)
                 .frame(width: width + 36)
                 .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16))

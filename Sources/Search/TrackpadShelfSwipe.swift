@@ -76,6 +76,56 @@ struct ShelfLiftDetector {
     }
 }
 
+struct ShelfTapDetector {
+    private var origins: [AnyHashable: CGPoint] = [:]
+    private var participants: Set<AnyHashable> = []
+    private var released: Set<AnyHashable> = []
+    private var started: TimeInterval = 0
+    private var blocked = false
+
+    mutating func reset() { self = Self() }
+
+    mutating func disqualify() { blocked = true }
+
+    mutating func update(_ touches: [AnyHashable: CGPoint], at now: TimeInterval,
+                         resting: Set<AnyHashable> = [], began: Set<AnyHashable> = [],
+                         ended: Set<AnyHashable> = [], finalPositions: [AnyHashable: CGPoint] = [:],
+                         cancelled: Bool = false) -> Bool {
+        let active = touches.filter { !resting.contains($0.key) }
+        if cancelled || active.count > 2 { disqualify() }
+        if blocked {
+            participants.formUnion(active.keys)
+            if participants.isDisjoint(with: Set(touches.keys)) { reset() }
+            return false
+        }
+        if origins.isEmpty {
+            // Adding a second finger to the pointing finger also counts; a swipe's leftovers do not.
+            guard active.count == 2, !began.isDisjoint(with: Set(active.keys)) else { return false }
+            origins = active
+            participants = Set(active.keys)
+            started = now
+            return false
+        }
+        released.formUnion(ended.intersection(participants))
+        let positions = touches.merging(finalPositions) { _, final in final }
+        guard now - started <= 0.28,
+              Set(active.keys).isSubset(of: participants),
+              resting.isDisjoint(with: participants),
+              participants.allSatisfy({ touches[$0] != nil || released.contains($0) }),
+              origins.allSatisfy({ id, origin in
+                  guard let point = positions[id] else { return released.contains(id) }
+                  return hypot(point.x - origin.x, point.y - origin.y) <= 3
+              }) else {
+            disqualify()
+            if participants.isDisjoint(with: Set(touches.keys)) { reset() }
+            return false
+        }
+        guard released == participants else { return false }
+        reset()
+        return true
+    }
+}
+
 @MainActor
 final class TrackpadShelfSwipe {
     private var detector = ShelfSwipeDetector()
@@ -101,8 +151,7 @@ final class TrackpadShelfSwipe {
         case .gesture:
             guard !event.touches(matching: .any, in: nil).isEmpty else { return false }
             receivesTouches = true
-            if browser.tabSwitcher.gesturePointer.takeLift(event) {
-                browser.commitTabSwitch()
+            if browser.tabSwitcher.gesturePointer.takeTouches(event, browser: browser) {
                 detector.reset()
                 return true
             }

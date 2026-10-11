@@ -13,6 +13,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- A two-finger tap closes the highlighted tab in the magnetic shelf and keeps it open on the next card. Scrolling, long holds, and the opening swipe do not count as taps; a secondary click closes the same way.
+
 - Page transitions now include **Slide**, **Fade**, and **Zoom**, with speed, offset, zoom in/out, and cube perspective controls. Each style remembers its tuning and can be previewed or reset in Settings › Tabs.
 
 - Choose **None** or **Cube** in Settings › Tabs › Page transition. Cube turns between live webpages in tab order, respects Reduce Motion, and keeps switching safe when interrupted or resized.

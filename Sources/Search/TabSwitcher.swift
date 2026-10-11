@@ -80,6 +80,17 @@ final class TabSwitcher: ObservableObject {
         newTabSelected = true
     }
 
+    func refreshShelf(row: [Tab.ID], preferred: Tab.ID?) {
+        guard gesture else { return }
+        let index = selectedID.flatMap { candidates.firstIndex(of: $0) } ?? 0
+        candidates = row
+        guard !candidates.isEmpty else { cancel(); return }
+        selectedID = preferred.flatMap { candidates.contains($0) ? $0 : nil }
+            ?? candidates[min(index, candidates.count - 1)]
+        newTabSelected = false
+        prune { kept($0) || candidates.contains($0) || partners.values.contains($0) }
+    }
+
     /// The tab just left goes to the front, with a picture of it as it was.
     /// Tabs that are gone fall out, and only the ten latest keep a picture.
     func left(_ tab: Tab, alive: Set<Tab.ID>) {
