@@ -73,6 +73,9 @@ final class Preferences: ObservableObject {
     @Published var gestureTabs: Bool {
         didSet { store.set(gestureTabs, forKey: "tabs.gesture") }
     }
+    @Published var gestureFingers: Int {
+        didSet { store.set(gestureFingers, forKey: "tabs.gesture.fingers") }
+    }
     @Published var gestureSpeed: Double {
         didSet { store.set(gestureSpeed, forKey: "tabs.gesture.speed") }
     }
@@ -387,6 +390,7 @@ final class Preferences: ObservableObject {
         sidebar = store.object(forKey: "sidebar") as? Bool
             ?? (store.string(forKey: "manner") == "side")
         gestureTabs = store.bool(forKey: "tabs.gesture")
+        gestureFingers = store.integer(forKey: "tabs.gesture.fingers") == 4 ? 4 : 3
         gestureSpeed = min(8, max(0.5, store.object(forKey: "tabs.gesture.speed") as? Double ?? 4))
         gesturePull = min(1, max(0, store.object(forKey: "tabs.gesture.pull") as? Double ?? 0.35))
         sidePosition = store.string(forKey: "sidebar.position").flatMap(SidebarPosition.init) ?? .left

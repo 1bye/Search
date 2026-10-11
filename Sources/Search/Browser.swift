@@ -132,6 +132,7 @@ final class Browser: NSObject, ObservableObject {
     }
 
     let tabSwitcher = TabSwitcher()
+    let trackpadShelfSwipe = TrackpadShelfSwipe()
 
     /// The tab whose page is currently out in the little window. Nothing
     /// floating means no window: the two are checked against each other rather

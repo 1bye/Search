@@ -6,11 +6,11 @@ This fork adds an optional magnetic tab shelf to [driceroland/Search](https://gi
 
 Build locally with `SEARCH_SIGN_IDENTITY=- ./build.sh debug`, then open `build/Search.app`. In **Settings → Tabs**, turn on **Gesture tabs**.
 
-- **Option–Space** opens or dismisses the shelf. Every tab in the current space stays in its original order. Split pairs share one preview.
+- **Swipe down with three fingers** to open the shelf, and **swipe down again** to dismiss. Settings → Tabs lets you choose **four fingers** instead. **Option–Space** is an optional keyboard fallback. Every tab in the current space stays in its original order. Split pairs share one preview.
 - Move one finger on the trackpad: the dot follows continuously and gently settles toward the nearest tab when you pause. **Click or Return** opens the selected tab; **Escape or right-click** dismisses.
 - Use **two fingers to scroll**, or move the dot toward the top/bottom edge. Arrow keys also navigate the full collection.
 - Press **S** in the shelf to adjust **Pointer speed** (default 4×) and **Magnetic attraction** (default 35%; 0 disables it).
-- To open it with four fingers, map a downward four-finger swipe to **Option–Space** in BetterTouchTool for this app. This build does not intercept macOS gestures or change system gesture settings.
+- Recognition is native to Search and works while its window is active and the pointer is inside it. macOS system gestures take priority: if the swipe opens App Exposé, turn it off in **System Settings → Trackpad → More Gestures**. If you use three-finger dragging, choose four fingers here or change the dragging gesture. No BetterTouchTool mapping is required. System gesture settings are left to you.
 
 The fork uses bundle ID `com.1bye.search`, profile folder `~/Library/Application Support/Search-1bye`, and separate credential labels. Upstream auto-updates are disabled so they cannot replace this experiment. Local builds are ad-hoc signed; this is not a notarized release. The original MIT license and attribution remain below.
 

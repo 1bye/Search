@@ -631,6 +631,7 @@ struct ContentView: View {
             .animation(browser.fieldShowing ? Motion.settle : Motion.quick, value: browser.fieldShowing)
             .background(WindowSetup { window = $0; dress($0) })
             .onChange(of: browser.prefs.gestureTabs) { _, _ in
+                browser.trackpadShelfSwipe.reset()
                 browser.tabSwitcher.cancel()
                 DispatchQueue.main.async { Lights.refresh(window); measureLights() }
             }
@@ -647,6 +648,7 @@ struct ContentView: View {
             // buttons, and on a light window they come out nearly white. Ours
             // go on in their place until the app comes back.
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                browser.trackpadShelfSwipe.reset()
                 browser.tabSwitcher.cancel()
                 measureLights()
                 resting?.isHidden = false
@@ -657,7 +659,10 @@ struct ContentView: View {
                 if let window, (note.object as? NSWindow) === window { Browsers.becameKey(browser) }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
-                if let window, (note.object as? NSWindow) === window { browser.tabSwitcher.cancel() }
+                if let window, (note.object as? NSWindow) === window {
+                    browser.trackpadShelfSwipe.reset()
+                    browser.tabSwitcher.cancel()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { note in
                 if let window, (note.object as? NSWindow) === window { browser.fullScreen = true }
@@ -929,6 +934,7 @@ struct ContentView: View {
 
     private func dress(_ window: NSWindow) {
         browser.window = window
+        window.contentView?.allowedTouchTypes.insert(.indirect)
         window.tabbingMode = .disallowed
         // Light or dark is the app's to say (Settings › Appearance); the
         // window only has to be the ground colour that goes with it.
@@ -983,7 +989,10 @@ struct ContentView: View {
     /// keystrokes because this runs first.
     private func watchKeys() {
         guard keys == nil else { return }
-        keys = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .leftMouseDown]) { event in
+        keys = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .leftMouseDown, .gesture, .swipe]) { event in
+            if event.type == .gesture || event.type == .swipe {
+                return browser.trackpadShelfSwipe.take(event, browser: browser) ? nil : event
+            }
             // A click on the tab switcher, in this window only (see
             // Browser.clickTabSwitcher), turned into the top-left coordinates
             // SwiftUI's frames are in.

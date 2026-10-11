@@ -396,11 +396,21 @@ struct SettingsPanel: View {
 
     private var tabs: some View {
         Card {
-            Line("Gesture tabs", "Hide the tab bar and sidebar. ⌥Space opens the shelf; move to a tab, then click or press Return. Esc puts it away.") {
+            Line("Gesture tabs", "Hide the tab bar and sidebar. Swipe down to open the shelf, move with one finger, and click to choose. Swipe down again or two-finger click to dismiss. ⌥Space is also available.") {
                 Switch(on: $prefs.gestureTabs)
                     .accessibilityRepresentation { Toggle("Gesture tabs", isOn: $prefs.gestureTabs) }
             }
             if prefs.gestureTabs {
+                Rule()
+                Line("Open with a downward swipe", "If macOS opens App Exposé, turn it off in System Settings → Trackpad → More Gestures.") {
+                    Segmented(options: [(3, "3 fingers"), (4, "4 fingers")], selection: $prefs.gestureFingers)
+                        .accessibilityRepresentation {
+                            Picker("Shelf swipe fingers", selection: $prefs.gestureFingers) {
+                                Text("3 fingers").tag(3)
+                                Text("4 fingers").tag(4)
+                            }.pickerStyle(.segmented)
+                        }
+                }
                 Rule()
                 Line("Pointer speed", String(format: "%.1f× · how far a finger movement travels", prefs.gestureSpeed)) {
                     Slider(value: $prefs.gestureSpeed, in: 0.5...8, step: 0.1)

@@ -250,7 +250,7 @@ struct GestureShelf: View {
                     .onAppear { pointer.start(browser: browser, size: layout.size) }
                     .onChange(of: layout.size) { _, size in pointer.resize(size) }
                     HStack {
-                        Text(pointer.captured ? "Click / Return to open · Esc to close" : "Click a tab / Return to open · Esc to close")
+                        Text("Click to open · \(prefs.gestureFingers)-finger swipe down to close")
                         Spacer()
                         Text("S  Settings · two fingers to scroll")
                     }

@@ -66,7 +66,7 @@ struct WelcomePanel: View {
                 Text("Search")
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(Palette.ink)
-                Text("An experimental fork of Search. Turn on Gesture tabs in Settings › Tabs to hide the tab bar and open a magnetic tab shelf with ⌥Space.")
+                Text("An experimental fork of Search. Turn on Gesture tabs in Settings › Tabs to hide the tab bar and open a magnetic tab shelf with a three- or four-finger downward swipe.")
                     .font(.system(size: 14.5))
                     .foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center)

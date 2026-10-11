@@ -13,6 +13,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- Open the magnetic shelf with a native three- or four-finger downward swipe, and dismiss with the same swipe again. Choose the finger count in Settings › Tabs; macOS App Exposé may need to be turned off to free the gesture.
+
 - Experimental gesture tabs: hide the tab bar, open every tab in the space with ⌥Space, and navigate with a continuous magnetic pointer. Speed and attraction are adjustable in Settings › Tabs. This fork keeps a separate profile and does not install upstream updates.
 
 - Close Group, in a tab group's menu, closes the group and every tab in it. One ⇧⌘T brings it all back, every tab in its place and the group named as it was, however many tabs it held. Asked for by email; thanks [@oddharsh](https://github.com/oddharsh) for bringing it back whole ([#473](https://github.com/driceroland/Search/pull/473))
