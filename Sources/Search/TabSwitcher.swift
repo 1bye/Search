@@ -13,6 +13,7 @@ final class TabSwitcher: ObservableObject {
     private var recentIDs: [Tab.ID] = []
     @Published private(set) var candidates: [Tab.ID] = []
     @Published private(set) var selectedID: Tab.ID?
+    @Published private(set) var newTabSelected = false
     @Published private(set) var visible = false
     @Published private var previews: [Tab.ID: (address: URL, image: NSImage)] = [:]
 
@@ -68,8 +69,15 @@ final class TabSwitcher: ObservableObject {
     }
 
     func pick(_ id: Tab.ID) {
-        guard candidates.contains(id), selectedID != id else { return }
+        guard candidates.contains(id) else { return }
+        if newTabSelected { newTabSelected = false }
+        guard selectedID != id else { return }
         selectedID = id
+    }
+
+    func pickNewTab() {
+        guard gesture, !newTabSelected else { return }
+        newTabSelected = true
     }
 
     /// The tab just left goes to the front, with a picture of it as it was.
@@ -112,10 +120,13 @@ final class TabSwitcher: ObservableObject {
     func move(_ direction: Direction) {
         guard let selectedID, let index = candidates.firstIndex(of: selectedID) else { return }
         show()
+        if newTabSelected { newTabSelected = false; return }
         let next: Int
         switch direction {
         case .left: next = (index - 1 + candidates.count) % candidates.count
-        case .right: next = (index + 1) % candidates.count
+        case .right:
+            if gesture, index % 5 == 4 || index == candidates.count - 1 { pickNewTab(); return }
+            next = (index + 1) % candidates.count
         case .up:
             guard index >= 5 else { return }
             next = index - 5
@@ -137,6 +148,7 @@ final class TabSwitcher: ObservableObject {
         guard active || reveal != nil || visible else { return }
         gesturePointer.stop()
         gesture = false
+        newTabSelected = false
         reveal?.cancel()
         reveal = nil
         generation = UUID()
@@ -373,6 +385,6 @@ struct TabSwitcherCard: View {
             Color.clear.preference(key: TabSwitcherCardFrames.self, value: [tab.id: box.frame(in: .global)])
         })
         .accessibilityLabel("Switch to \(tab.label)")
-        .accessibilityValue(tab.id == switcher.selectedID ? "Selected" : "")
+        .accessibilityValue(tab.id == switcher.selectedID && !switcher.newTabSelected ? "Selected" : "")
     }
 }

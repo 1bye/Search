@@ -32,14 +32,22 @@ struct MagneticPointer {
 }
 
 struct ShelfLayout {
+    static let newTabSpace: CGFloat = 56
     var count: Int
     var size: CGSize
     var columns: Int { min(5, max(1, count)) }
-    var cardWidth: CGFloat { (size.width - CGFloat(columns - 1) * 8) / CGFloat(columns) }
+    var tabsWidth: CGFloat { size.width - Self.newTabSpace }
+    var cardWidth: CGFloat { (tabsWidth - CGFloat(columns - 1) * 8) / CGFloat(columns) }
     var previewHeight: CGFloat { (cardWidth - 16) * 0.62 }
     var cardHeight: CGFloat { previewHeight + 39 }
     var contentHeight: CGFloat { CGFloat((count + columns - 1) / columns) * (cardHeight + 8) - 8 }
     var maxScroll: CGFloat { max(0, contentHeight - size.height) }
+    var newTabFrame: CGRect { CGRect(x: tabsWidth + 12, y: (size.height - 44) / 2, width: 44, height: 44) }
+
+    func targetsNewTab(at point: CGPoint, keeping selected: Bool) -> Bool {
+        let margin: CGFloat = selected ? 10 : 6
+        return newTabFrame.insetBy(dx: -margin, dy: -margin).contains(point)
+    }
 
     func frame(_ index: Int, scroll: CGFloat) -> CGRect {
         CGRect(x: CGFloat(index % columns) * (cardWidth + 8),
@@ -156,6 +164,11 @@ final class GestureShelfState: ObservableObject {
     }
 
     func centerSelection() {
+        if switcher?.newTabSelected == true {
+            pointer = MagneticPointer(point: CGPoint(x: layout.newTabFrame.midX, y: layout.newTabFrame.midY))
+            point = pointer.point
+            return
+        }
         guard let switcher, let id = switcher.selectedID,
               let index = switcher.candidates.firstIndex(of: id), layout.size.width > 0 else { return }
         let rect = layout.frame(index, scroll: scroll)
@@ -169,6 +182,10 @@ final class GestureShelfState: ObservableObject {
 
     private func choose() {
         guard let switcher else { return }
+        if layout.targetsNewTab(at: pointer.point, keeping: switcher.newTabSelected) {
+            switcher.pickNewTab()
+            return
+        }
         let current = switcher.selectedID.flatMap { switcher.candidates.firstIndex(of: $0) }
         if let index = layout.nearest(to: pointer.point, scroll: scroll, keeping: current) {
             switcher.pick(switcher.candidates[index])
@@ -187,14 +204,16 @@ final class GestureShelfState: ObservableObject {
         let dt = min(0.04, now - lastTick)
         lastTick = now
         // Edge scrolling only follows fresh movement toward that edge, never a resting dot.
-        if now - pointer.lastInput < 0.08 {
+        if now - pointer.lastInput < 0.08, pointer.point.x < layout.tabsWidth {
             let y = pointer.point.y, edge: CGFloat = 32
             let pressure: CGFloat = pointer.vertical > 0 ? max(0, (y - layout.size.height + edge) / edge)
                 : pointer.vertical < 0 ? -max(0, (edge - y) / edge) : 0
             let next = min(layout.maxScroll, max(0, scroll + pressure * 900 * dt))
             if next != scroll { scroll = next; choose() }
         }
-        if let id = switcher.selectedID, let index = switcher.candidates.firstIndex(of: id) {
+        if switcher.newTabSelected {
+            pointer.attract(to: layout.newTabFrame, at: now, dt: dt, strength: CGFloat(prefs.gesturePull))
+        } else if let id = switcher.selectedID, let index = switcher.candidates.firstIndex(of: id) {
             let target = layout.frame(index, scroll: scroll)
             pointer.attract(to: target, at: now, dt: dt, strength: CGFloat(prefs.gesturePull))
         }
@@ -226,7 +245,8 @@ struct GestureShelf: View {
     var body: some View {
         GeometryReader { geometry in
             let columns = min(5, switcher.candidates.count)
-            let width = min(CGFloat(columns) * 176 + CGFloat(columns - 1) * 8, geometry.size.width - 48)
+            let width = min(CGFloat(columns) * 176 + CGFloat(columns - 1) * 8 + ShelfLayout.newTabSpace,
+                            geometry.size.width - 48)
             let tentative = ShelfLayout(count: switcher.candidates.count, size: CGSize(width: width, height: 1))
             let height = min(tentative.contentHeight, max(140, geometry.size.height - 84))
             let layout = ShelfLayout(count: switcher.candidates.count, size: CGSize(width: width, height: height))
@@ -240,10 +260,25 @@ struct GestureShelf: View {
                                             width: layout.cardWidth, previewHeight: layout.previewHeight,
                                             height: layout.cardHeight)
                                 .background(RoundedRectangle(cornerRadius: 8)
-                                    .fill(id == switcher.selectedID ? Palette.faint : Color.clear))
+                                    .fill(id == switcher.selectedID && !switcher.newTabSelected ? Palette.faint : Color.clear))
                                 .position(x: frame.midX, y: frame.midY)
                         }
                     }
+                    Button {
+                        switcher.pickNewTab()
+                        browser.commitTabSwitch()
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(switcher.newTabSelected ? Palette.ink : Palette.muted)
+                            .frame(width: 44, height: 44)
+                            .background(switcher.newTabSelected ? Palette.faint : Palette.wash, in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("New Tab")
+                    .accessibilityValue(switcher.newTabSelected ? "Selected" : "")
+                    .position(x: layout.newTabFrame.midX, y: layout.newTabFrame.midY)
                     if pointer.captured {
                         Circle().fill(Color(red: 0.83, green: 1, blue: 0.9))
                             .frame(width: 11, height: 11)

@@ -3298,6 +3298,11 @@ final class Browser: NSObject, ObservableObject {
     }
 
     func commitTabSwitch(picking id: Tab.ID? = nil) {
+        if id == nil, tabSwitcher.gesture, tabSwitcher.newTabSelected {
+            tabSwitcher.cancel()
+            newTab()
+            return
+        }
         guard let target = tabSwitcher.finish(picking: id),
               let tab = tabs.first(where: { $0.id == target }) else { return }
         select(entry(tab))

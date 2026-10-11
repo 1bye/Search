@@ -1,7 +1,93 @@
+import AppKit
 import XCTest
 @testable import Search
 
 final class GestureShelfTests: XCTestCase {
+    override class func setUp() {
+        setenv("SEARCH_PROBE", "gesture-shelf-\(getpid())", 1)
+        super.setUp()
+    }
+
+    func testNewTabTargetStaysReachableBesideScrolledCards() {
+        for count in [1, 24] {
+            let layout = ShelfLayout(count: count, size: CGSize(width: count == 1 ? 232 : 968, height: 320))
+            let target = layout.newTabFrame
+            XCTAssertTrue(CGRect(origin: .zero, size: layout.size).contains(target))
+            XCTAssertGreaterThan(target.minX, layout.tabsWidth)
+            XCTAssertTrue(layout.targetsNewTab(at: CGPoint(x: target.midX, y: target.midY), keeping: false))
+            let boundary = CGPoint(x: target.minX - 8, y: target.midY)
+            XCTAssertFalse(layout.targetsNewTab(at: boundary, keeping: false))
+            XCTAssertTrue(layout.targetsNewTab(at: boundary, keeping: true))
+            for scroll in [CGFloat.zero, layout.maxScroll] {
+                for index in 0..<count {
+                    let card = layout.frame(index, scroll: scroll)
+                    XCTAssertFalse(card.intersects(target))
+                    XCTAssertFalse(layout.targetsNewTab(at: CGPoint(x: card.midX, y: card.midY), keeping: true))
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testNewTabTargetCanReturnToTheSameTabAndCancel() {
+        let ids = (0..<7).map { _ in UUID() }
+        let switcher = TabSwitcher()
+        switcher.openShelf(row: ids, current: ids[4])
+        switcher.move(.right)
+        XCTAssertTrue(switcher.newTabSelected)
+        switcher.move(.left)
+        XCTAssertFalse(switcher.newTabSelected)
+        XCTAssertEqual(switcher.selectedID, ids[4])
+        switcher.pickNewTab()
+        switcher.pick(ids[4])
+        XCTAssertFalse(switcher.newTabSelected)
+        switcher.pick(ids[6])
+        switcher.move(.right)
+        XCTAssertTrue(switcher.newTabSelected)
+        switcher.cancel()
+        XCTAssertFalse(switcher.newTabSelected)
+        switcher.step(row: ids, current: ids[0], backwards: false)
+        switcher.pickNewTab()
+        XCTAssertFalse(switcher.newTabSelected)
+        switcher.cancel()
+    }
+
+    @MainActor
+    func testCommittingNewTabClosesShelfAndFocusesAnEmptyTab() throws {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let existing = Tab(bench: true)
+        browser.receive(existing)
+        let count = browser.tabs.count
+        let focus = browser.focusRequest
+        browser.tabSwitcher.openShelf(row: [existing.id], current: existing.id)
+        browser.tabSwitcher.pickNewTab()
+        browser.commitTabSwitch()
+        XCTAssertEqual(browser.tabs.count, count + 1)
+        XCTAssertNotEqual(browser.activeID, existing.id)
+        XCTAssertTrue(try XCTUnwrap(browser.active).isBlank)
+        XCTAssertGreaterThan(browser.focusRequest, focus)
+        XCTAssertFalse(browser.tabSwitcher.visible)
+        XCTAssertFalse(browser.tabSwitcher.newTabSelected)
+        XCTAssertFalse(browser.tabSwitcher.gesturePointer.captured)
+    }
+
+    @MainActor
+    func testExplicitTabChoiceOverridesNewTabTarget() {
+        _ = NSApplication.shared
+        let browser = Browser(record: WindowRecord())
+        let existing = Tab(bench: true)
+        browser.receive(existing)
+        let count = browser.tabs.count
+        browser.tabSwitcher.openShelf(row: [existing.id], current: existing.id)
+        browser.tabSwitcher.pickNewTab()
+        browser.commitTabSwitch(picking: existing.id)
+        XCTAssertEqual(browser.tabs.count, count)
+        XCTAssertEqual(browser.activeID, existing.id)
+        XCTAssertFalse(browser.tabSwitcher.visible)
+        XCTAssertFalse(browser.tabSwitcher.newTabSelected)
+    }
+
     func testEveryFastDeltaAppliesAndBreaksAwayFromAttraction() {
         let target = CGRect(x: 0, y: 0, width: 180, height: 140)
         var pointer = MagneticPointer(point: CGPoint(x: 90, y: 70))
