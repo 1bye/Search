@@ -13,6 +13,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- Page transitions now include **Slide**, **Fade**, and **Zoom**, with speed, offset, zoom in/out, and cube perspective controls. Each style remembers its tuning and can be previewed or reset in Settings › Tabs.
+
 - Choose **None** or **Cube** in Settings › Tabs › Page transition. Cube turns between live webpages in tab order, respects Reduce Motion, and keeps switching safe when interrupted or resized.
 
 - A fixed **+** target beside the magnetic shelf opens a new tab with the same move-and-lift gesture.

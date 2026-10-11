@@ -85,6 +85,16 @@ final class Preferences: ObservableObject {
     @Published var pageTransition: PageTransition {
         didSet { store.set(pageTransition.rawValue, forKey: "pages.transition") }
     }
+    @Published private var pageTransitionTunings: [String: PageTransitionTuning] {
+        didSet { store.set(try? JSONEncoder().encode(pageTransitionTunings), forKey: "pages.transition.tuning") }
+    }
+    var pageTransitionTuning: PageTransitionTuning {
+        get { pageTransitionTunings[pageTransition.rawValue] ?? .defaults(for: pageTransition) }
+        set { pageTransitionTunings[pageTransition.rawValue] = newValue.clamped }
+    }
+    func resetPageTransitionTuning() {
+        pageTransitionTunings.removeValue(forKey: pageTransition.rawValue)
+    }
     /// Which side the column is on when it is shown vertically.
     @Published var sidePosition: SidebarPosition {
         didSet { store.set(sidePosition.rawValue, forKey: "sidebar.position") }
@@ -397,6 +407,9 @@ final class Preferences: ObservableObject {
         gestureSpeed = min(8, max(0.5, store.object(forKey: "tabs.gesture.speed") as? Double ?? 4))
         gesturePull = min(1, max(0, store.object(forKey: "tabs.gesture.pull") as? Double ?? 0.35))
         pageTransition = store.string(forKey: "pages.transition").flatMap(PageTransition.init(rawValue:)) ?? .none
+        pageTransitionTunings = (store.data(forKey: "pages.transition.tuning")
+            .flatMap { try? JSONDecoder().decode([String: PageTransitionTuning].self, from: $0) } ?? [:])
+            .mapValues { $0.clamped }
         sidePosition = store.string(forKey: "sidebar.position").flatMap(SidebarPosition.init) ?? .left
         sideHides = store.bool(forKey: "sidebar.hides")
         let width = store.object(forKey: "sidebar.width") as? Double ?? Double(Metrics.side)

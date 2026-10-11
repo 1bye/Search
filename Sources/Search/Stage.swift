@@ -15,6 +15,7 @@ struct Page: View {
     /// and only what goes over it is wanted here.
     var holdsPage = true
     var transition: PageTransition = .none
+    var tuning: PageTransitionTuning = .init()
     var direction: CGFloat = 1
 
     var body: some View {
@@ -28,7 +29,7 @@ struct Page: View {
             // the tab stayed empty. Nothing, then the page, is a change.
             if holdsPage {
                 WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web,
-                         transition: transition, selection: tab.id, direction: direction)
+                         transition: transition, selection: tab.id, direction: direction, tuning: tuning)
             }
 
             if let cover = tab.cover {
@@ -206,16 +207,17 @@ struct WebStage: NSViewRepresentable {
     var transition: PageTransition = .none
     var selection: Tab.ID? = nil
     var direction: CGFloat = 1
+    var tuning: PageTransitionTuning = .init()
 
     func makeNSView(context: Context) -> StageView { StageView() }
 
     func updateNSView(_ view: StageView, context: Context) {
-        view.show(page, transition: transition, selection: selection, direction: direction)
+        view.show(page, transition: transition, selection: selection, direction: direction, tuning: tuning)
     }
 }
 
 final class StageView: NSView {
-    /// What this stage has been told to show. A cube turn briefly keeps the
+    /// What this stage has been told to show. A transition briefly keeps the
     /// departing page too, until its animation finishes or is interrupted.
     ///
     /// It used to track that *and* what it was holding, and reconcile the two.
@@ -274,10 +276,10 @@ final class StageView: NSView {
     }
 
     func show(_ page: NSView?, transition: PageTransition = .none,
-              selection: Tab.ID? = nil, direction: CGFloat = 1) {
+              selection: Tab.ID? = nil, direction: CGFloat = 1, tuning: PageTransitionTuning = .init()) {
         if wanted !== page || transition == .none { finishTurn() }
         let leaving = wanted
-        let canTurn = transition == .cube && !Motion.reduced && window != nil
+        let canTurn = transition != .none && !Motion.reduced && window != nil
             && selection != nil && self.selection != nil && selection != self.selection
             && bounds.width > 0 && bounds.height > 0 && leaving?.superview === self
             && leaving !== page && page != nil && !inspecting
@@ -293,10 +295,13 @@ final class StageView: NSView {
         wanted = page
         self.selection = selection
         settle()
-        if canTurn, let leaving, let page { startTurn(from: leaving, to: page, direction: direction) }
+        if canTurn, let leaving, let page {
+            startTurn(from: leaving, to: page, direction: direction, style: transition, tuning: tuning)
+        }
     }
 
-    private func startTurn(from old: NSView, to page: NSView, direction: CGFloat) {
+    private func startTurn(from old: NSView, to page: NSView, direction: CGFloat,
+                           style: PageTransition, tuning: PageTransitionTuning) {
         wantsLayer = true
         layer?.masksToBounds = true
         layer?.backgroundColor = Palette.NS.ground.cgColor
@@ -307,8 +312,9 @@ final class StageView: NSView {
         for (view, incoming) in [(old, false), (page, true)] {
             view.wantsLayer = true
             guard let face = view.layer else { continue }
-            face.add(PageCube.animation(incoming: incoming, direction: direction, size: turnSize,
-                                        anchor: face.anchorPoint), forKey: "pageCube")
+            face.add(PageMotion.animation(style: style, tuning: tuning, incoming: incoming, direction: direction,
+                                          size: turnSize, anchor: face.anchorPoint), forKey: "pageTransition")
+            guard style == .cube else { continue }
             let shade = CALayer()
             shade.frame = face.bounds
             shade.backgroundColor = NSColor.black.cgColor
@@ -317,7 +323,7 @@ final class StageView: NSView {
             let dim = CABasicAnimation(keyPath: "opacity")
             dim.fromValue = incoming ? 0.22 : 0
             dim.toValue = incoming ? 0 : 0.22
-            dim.duration = PageCube.duration
+            dim.duration = tuning.duration
             dim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             dim.fillMode = .both
             dim.isRemovedOnCompletion = false
@@ -326,15 +332,15 @@ final class StageView: NSView {
         }
         let end = DispatchWorkItem { [weak self] in self?.finishTurn() }
         turnEnd = end
-        DispatchQueue.main.asyncAfter(deadline: .now() + PageCube.duration, execute: end)
+        DispatchQueue.main.asyncAfter(deadline: .now() + tuning.duration, execute: end)
     }
 
     private func finishTurn() {
         turnEnd?.cancel()
         turnEnd = nil
         guard let old = turningFrom else { return }
-        old.layer?.removeAnimation(forKey: "pageCube")
-        wanted?.layer?.removeAnimation(forKey: "pageCube")
+        old.layer?.removeAnimation(forKey: "pageTransition")
+        wanted?.layer?.removeAnimation(forKey: "pageTransition")
         shades.forEach { $0.removeFromSuperlayer() }
         shades.removeAll()
         turningFrom = nil

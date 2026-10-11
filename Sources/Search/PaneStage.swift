@@ -27,6 +27,7 @@ struct PaneStageView: NSViewRepresentable {
     var find: Browser? = nil
     var transition: PageTransition = .none
     var direction: CGFloat = 1
+    var tuning: PageTransitionTuning = .init()
 
     func makeNSView(context: Context) -> PaneStage { PaneStage() }
 
@@ -38,6 +39,7 @@ struct PaneStageView: NSViewRepresentable {
         stage.onHover = hover
         stage.pageTransition = transition
         stage.pageTransitionDirection = direction
+        stage.pageTransitionTuning = tuning
         stage.show(tabs, split: split, focused: focused)
         stage.showFind(find)
     }
@@ -46,6 +48,7 @@ struct PaneStageView: NSViewRepresentable {
 final class PaneStage: NSView {
     var pageTransition: PageTransition = .none
     var pageTransitionDirection: CGFloat = 1
+    var pageTransitionTuning: PageTransitionTuning = .init()
     private var tabTransition: PageTransition = .none
     var onCommit: ((UUID, [Double]) -> Void)?
     var onFocus: ((Tab) -> Void)?
@@ -228,7 +231,7 @@ final class PaneStage: NSView {
             guard fed[index] != id else { continue }
             fed[index] = id
             slot.show(wanted, transition: tabTransition, selection: index < tabs.count ? tabs[index].id : nil,
-                      direction: pageTransitionDirection)
+                      direction: pageTransitionDirection, tuning: pageTransitionTuning)
         }
     }
 
