@@ -30,6 +30,40 @@ struct ShelfSwipeDetector {
     }
 }
 
+struct ShelfLiftDetector {
+    private var finger: AnyHashable?
+    private var origin = CGPoint.zero
+    private var armed = false
+
+    mutating func reset() { self = Self() }
+
+    mutating func update(_ touches: [AnyHashable: CGPoint], resting: Set<AnyHashable> = [],
+                         ended: Set<AnyHashable> = [], cancelled: Bool = false) -> Bool {
+        guard !cancelled else { reset(); return false }
+        let active = touches.filter { !resting.contains($0.key) }
+        guard active.count <= 1 else { reset(); return false }
+        if let finger, ended.contains(finger), touches[finger] == nil {
+            let select = armed && active.isEmpty
+            reset()
+            return select
+        }
+        guard let (id, point) = active.first else {
+            // A resting finger is still down; only a real end can select.
+            if let finger, touches[finger] != nil { return false }
+            reset()
+            return false
+        }
+        if finger != id {
+            finger = id
+            origin = point
+            armed = false
+        } else if hypot(point.x - origin.x, point.y - origin.y) >= 1 {
+            armed = true
+        }
+        return false
+    }
+}
+
 @MainActor
 final class TrackpadShelfSwipe {
     private var detector = ShelfSwipeDetector()
@@ -54,6 +88,11 @@ final class TrackpadShelfSwipe {
         switch event.type {
         case .gesture:
             if !event.touches(matching: .any, in: nil).isEmpty { receivesTouches = true }
+            if browser.tabSwitcher.gesturePointer.takeLift(event) {
+                browser.commitTabSwitch()
+                detector.reset()
+                return true
+            }
             if !event.touches(matching: .cancelled, in: nil).isEmpty { detector.reset(); return false }
             let active = event.touches(matching: .touching, in: nil).filter { $0.type == .indirect && !$0.isResting }
             var positions: [AnyHashable: CGPoint] = [:]

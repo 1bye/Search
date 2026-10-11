@@ -935,6 +935,8 @@ struct ContentView: View {
     private func dress(_ window: NSWindow) {
         browser.window = window
         window.contentView?.allowedTouchTypes.insert(.indirect)
+        // Otherwise AppKit can report a resting finger as an ended touch.
+        window.contentView?.wantsRestingTouches = true
         window.tabbingMode = .disallowed
         // Light or dark is the app's to say (Settings › Appearance); the
         // window only has to be the ground colour that goes with it.

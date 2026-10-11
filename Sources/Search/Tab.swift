@@ -595,6 +595,7 @@ final class Tab: ObservableObject, Identifiable {
         // again at a bigger size — and both are worth having.
         web.allowsMagnification = true
         web.allowedTouchTypes.insert(.indirect)
+        web.wantsRestingTouches = true
         // WebKit's own two-finger swipe stays off. It drags the page across
         // the window with a picture of the last one behind it; ours is in
         // PageView, and it moves nothing but a disc.

@@ -13,6 +13,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- Lift to select in the magnetic shelf: move with one finger, then lift to open the selected tab. Resting, scrolling, and releasing the opening swipe do not select on their own.
+
 - Open the magnetic shelf with a native three- or four-finger downward swipe, and dismiss with the same swipe again. Choose the finger count in Settings › Tabs; macOS App Exposé may need to be turned off to free the gesture.
 
 - Experimental gesture tabs: hide the tab bar, open every tab in the space with ⌥Space, and navigate with a continuous magnetic pointer. Speed and attraction are adjustable in Settings › Tabs. This fork keeps a separate profile and does not install upstream updates.

@@ -68,6 +68,7 @@ final class GestureShelfState: ObservableObject {
     @Published private(set) var scroll: CGFloat = 0
     @Published private(set) var captured = false
     private var pointer = MagneticPointer(point: .zero)
+    private var lift = ShelfLiftDetector()
     private var layout = ShelfLayout(count: 0, size: .zero)
     private weak var switcher: TabSwitcher?
     private weak var prefs: Preferences?
@@ -132,6 +133,22 @@ final class GestureShelfState: ObservableObject {
         RunLoop.main.add(clock, forMode: .common)
     }
 
+    func takeLift(_ event: NSEvent) -> Bool {
+        guard captured, switcher?.gesture == true else { return false }
+        var positions: [AnyHashable: CGPoint] = [:]
+        var resting: Set<AnyHashable> = []
+        for touch in event.touches(matching: .touching, in: nil) where touch.type == .indirect {
+            guard let id = touch.identity as? AnyHashable else { continue }
+            positions[id] = CGPoint(x: touch.normalizedPosition.x * touch.deviceSize.width,
+                                    y: touch.normalizedPosition.y * touch.deviceSize.height)
+            if touch.isResting { resting.insert(id) }
+        }
+        let ended = Set(event.touches(matching: .ended, in: nil)
+            .filter { $0.type == .indirect }.compactMap { $0.identity as? AnyHashable })
+        let cancelled = !event.touches(matching: .cancelled, in: nil).isEmpty
+        return lift.update(positions, resting: resting, ended: ended, cancelled: cancelled)
+    }
+
     func resize(_ size: CGSize) {
         guard size.width > 0, size.height > 0, let switcher else { return }
         layout = ShelfLayout(count: switcher.candidates.count, size: size)
@@ -186,6 +203,7 @@ final class GestureShelfState: ObservableObject {
     }
 
     func stop() {
+        lift.reset()
         timer?.invalidate(); timer = nil
         if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil
         if let termination { NotificationCenter.default.removeObserver(termination) }; termination = nil
